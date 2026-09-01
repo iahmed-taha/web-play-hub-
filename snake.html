@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #0F1419;
+    color: #E6EDF3;
+    font-family: system-ui, -apple-system, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wrap { text-align: center; }
+  h1 {
+    font-size: 1.4rem;
+    margin: 0 0 4px;
+    letter-spacing: .5px;
+  }
+  p.sub {
+    margin: 0 0 16px;
+    color: #8B98A7;
+    font-size: 0.85rem;
+  }
+  canvas {
+    background: #161B22;
+    border: 1px solid #26303D;
+    border-radius: 8px;
+    display: block;
+    touch-action: none;
+  }
+  .hud {
+    display: flex;
+    justify-content: space-between;
+    width: 400px;
+    max-width: 92vw;
+    margin: 0 auto 8px;
+    font-size: 0.85rem;
+    color: #8B98A7;
+  }
+  .hud span { color: #3FB950; font-weight: 600; }
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,20,25,0.88);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #overlay.show { display: flex; }
+  #overlay h2 { margin: 0; font-size: 1.6rem; }
+  #overlay p { margin: 0; color: #8B98A7; text-align: center; max-width: 320px; }
+  button {
+    background: #3FB950;
+    color: #0F1419;
+    border: none;
+    padding: 10px 22px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  .hint {
+    margin-top: 14px;
+    color: #8B98A7;
+    font-size: 0.75rem;
+  }
+  .dpad {
+    display: none;
+    grid-template-columns: repeat(3, 54px);
+    grid-template-rows: repeat(2, 54px);
+    gap: 6px;
+    justify-content: center;
+    margin-top: 14px;
+  }
+  .dpad button {
+    background: #161B22;
+    color: #E6EDF3;
+    border: 1px solid #26303D;
+    font-size: 1.2rem;
+    padding: 0;
+  }
+  #up { grid-column: 2; grid-row: 1; }
+  #left { grid-column: 1; grid-row: 2; }
+  #down { grid-column: 2; grid-row: 2; }
+  #right { grid-column: 3; grid-row: 2; }
+  @media (pointer: coarse) {
+    .dpad { display: grid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <h1>Snake</h1>
+  <p class="sub">Move: arrow keys or WASD · Start: Space</p>
+  <div class="hud">
+    <div>Score: <span id="score">0</span></div>
+    <div>High score: <span id="highScore">0</span></div>
+  </div>
+  <canvas id="game" width="400" height="400"></canvas>
+  <div class="dpad">
+    <button id="up">▲</button>
+    <button id="left">◀</button>
+    <button id="down">▼</button>
+    <button id="right">▶</button>
+  </div>
+  <p class="hint">A self-contained Snake game — no dependencies.</p>
+</div>
+
+<div id="overlay">
+  <h2 id="overlayTitle">Snake</h2>
+  <p id="overlayText">Eat the food, don't hit yourself or the wall.</p>
+  <button id="startBtn">Start</button>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const cell = 20;
+  const cols = canvas.width / cell;
+  const rows = canvas.height / cell;
+
+  const scoreEl = document.getElementById('score');
+  const highScoreEl = document.getElementById('highScore');
+  const overlay = document.getElementById('overlay');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlayText = document.getElementById('overlayText');
+  const startBtn = document.getElementById('startBtn');
+
+  let snake, dir, nextDir, food, score, running, tickMs, timer;
+  let highScore = Number(localStorage.getItem('snake_high_score') || 0);
+  highScoreEl.textContent = highScore;
+
+  function resetGame() {
+    snake = [
+      { x: 8, y: 10 },
+      { x: 7, y: 10 },
+      { x: 6, y: 10 }
+    ];
+    dir = { x: 1, y: 0 };
+    nextDir = { x: 1, y: 0 };
+    score = 0;
+    tickMs = 120;
+    scoreEl.textContent = score;
+    placeFood();
+  }
+
+  function placeFood() {
+    let pos;
+    do {
+      pos = {
+        x: Math.floor(Math.random() * cols),
+        y: Math.floor(Math.random() * rows)
+      };
+    } while (snake.some(s => s.x === pos.x && s.y === pos.y));
+    food = pos;
+  }
+
+  function drawCell(x, y, color, inset) {
+    const pad = inset ? 2 : 0;
+    ctx.fillStyle = color;
+    ctx.fillRect(x * cell + pad, y * cell + pad, cell - pad * 2, cell - pad * 2);
+  }
+
+  function render() {
+    ctx.fillStyle = '#161B22';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // subtle grid
+    ctx.strokeStyle = 'rgba(230,237,243,0.04)';
+    for (let i = 1; i < cols; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * cell, 0);
+      ctx.lineTo(i * cell, canvas.height);
+      ctx.stroke();
+    }
+    for (let j = 1; j < rows; j++) {
+      ctx.beginPath();
+      ctx.moveTo(0, j * cell);
+      ctx.lineTo(canvas.width, j * cell);
+      ctx.stroke();
+    }
+
+    drawCell(food.x, food.y, '#D29922', true);
+
+    snake.forEach((seg, i) => {
+      drawCell(seg.x, seg.y, i === 0 ? '#3FB950' : '#2E8B47', true);
+    });
+  }
+
+  function step() {
+    dir = nextDir;
+    const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+
+    if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows ||
+        snake.some(s => s.x === head.x && s.y === head.y)) {
+      endGame();
+      return;
+    }
+
+    snake.unshift(head);
+
+    if (head.x === food.x && head.y === food.y) {
+      score += 10;
+      scoreEl.textContent = score;
+      tickMs = Math.max(60, 120 - Math.floor(score / 50) * 5);
+      placeFood();
+      restartTimer();
+    } else {
+      snake.pop();
+    }
+
+    render();
+  }
+
+  function restartTimer() {
+    clearInterval(timer);
+    timer = setInterval(step, tickMs);
+  }
+
+  function startGame() {
+    resetGame();
+    overlay.classList.remove('show');
+    running = true;
+    render();
+    restartTimer();
+  }
+
+  function endGame() {
+    running = false;
+    clearInterval(timer);
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('snake_high_score', String(highScore));
+      highScoreEl.textContent = highScore;
+    }
+    overlayTitle.textContent = 'Game over';
+    overlayText.textContent = `Score: ${score} · High score: ${highScore} · Press Space or tap Restart`;
+    startBtn.textContent = 'Restart';
+    overlay.classList.add('show');
+  }
+
+  function setDir(x, y) {
+    // prevent reversing directly into itself
+    if (dir.x === -x && dir.y === -y) return;
+    nextDir = { x, y };
+  }
+
+  document.addEventListener('keydown', e => {
+    switch (e.code) {
+      case 'ArrowUp': case 'KeyW': setDir(0, -1); e.preventDefault(); break;
+      case 'ArrowDown': case 'KeyS': setDir(0, 1); e.preventDefault(); break;
+      case 'ArrowLeft': case 'KeyA': setDir(-1, 0); e.preventDefault(); break;
+      case 'ArrowRight': case 'KeyD': setDir(1, 0); e.preventDefault(); break;
+      case 'Space':
+        e.preventDefault();
+        if (!running) startGame();
+        break;
+    }
+  });
+
+  document.getElementById('up').addEventListener('click', () => setDir(0, -1));
+  document.getElementById('down').addEventListener('click', () => setDir(0, 1));
+  document.getElementById('left').addEventListener('click', () => setDir(-1, 0));
+  document.getElementById('right').addEventListener('click', () => setDir(1, 0));
+
+  // basic swipe support
+  let touchStart = null;
+  canvas.addEventListener('touchstart', e => {
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+  canvas.addEventListener('touchend', e => {
+    if (!touchStart) return;
+    const dx = e.changedTouches[0].clientX - touchStart.x;
+    const dy = e.changedTouches[0].clientY - touchStart.y;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      setDir(dx > 0 ? 1 : -1, 0);
+    } else {
+      setDir(0, dy > 0 ? 1 : -1);
+    }
+    touchStart = null;
+  }, { passive: true });
+
+  startBtn.addEventListener('click', startGame);
+
+  // Initial paint
+  resetGame();
+  render();
+  overlay.classList.add('show');
+})();
+</script>
+
+</body>
+</html>
