@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas Index — Countries &amp; Their Landmarks</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; background:#0F2027; }
+  .font-display { font-family: 'Fraunces', serif; }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: #2E5959; border-radius: 4px; }
+  .stamp-border {
+    border: 1px solid #3A6363;
+    position: relative;
+  }
+  .stamp-border::before {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    border: 1px dashed #3A6363;
+    pointer-events: none;
+  }
+  .pill.active {
+    background: #C9542F;
+    color: #FBF4E8;
+    border-color: #C9542F;
+  }
+  #modal-overlay {
+    backdrop-filter: blur(3px);
+  }
+  .fade-in { animation: fadeIn .18s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity:1; transform: translateY(0);} }
+</style>
+</head>
+<body class="min-h-screen text-[#DCE6E3]">
+
+  <!-- Header -->
+  <header class="border-b border-[#22403F] bg-[#0B1A1F]">
+    <div class="max-w-6xl mx-auto px-6 py-8 flex flex-col gap-6">
+      <div class="flex items-baseline justify-between flex-wrap gap-3">
+        <h1 class="font-display text-4xl md:text-5xl text-[#F2E9D8] tracking-tight">Atlas Index</h1>
+        <p class="text-sm text-[#7FA39B] max-w-xs text-right hidden sm:block">A field guide to what makes each country worth the trip, and where to go once you land.</p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <input id="search-input" type="text" placeholder="Search a country — try “Japan” or “desert”"
+            class="w-full bg-[#122A2B] border border-[#2E5959] rounded-sm px-4 py-3 text-[#F2E9D8] placeholder-[#5C8580] focus:outline-none focus:ring-2 focus:ring-[#C9542F] focus:border-[#C9542F] text-sm">
+        </div>
+        <div id="country-count" class="text-xs text-[#7FA39B] self-center sm:self-auto sm:px-2 whitespace-nowrap"></div>
+      </div>
+
+      <div id="continent-filters" class="flex flex-wrap gap-2"></div>
+    </div>
+  </header>
+
+  <!-- Grid -->
+  <main class="max-w-6xl mx-auto px-6 py-10">
+    <div id="country-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+    <p id="empty-state" class="hidden text-center text-[#5C8580] py-16 text-sm">No countries match that search. Try a different name or region.</p>
+  </main>
+
+  <footer class="border-t border-[#22403F] mt-6">
+    <div class="max-w-6xl mx-auto px-6 py-6 text-xs text-[#5C8580] flex justify-between flex-wrap gap-2">
+      <span>Atlas Index — an illustrative travel reference, not exhaustive.</span>
+      <span id="footer-count"></span>
+    </div>
+  </footer>
+
+  <!-- Modal -->
+  <div id="modal-overlay" class="hidden fixed inset-0 bg-black/70 z-40 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div id="modal-panel" class="fade-in bg-[#0F2A2C] stamp-border rounded-sm max-w-2xl w-full my-8 relative">
+      <div class="p-7 sm:p-9">
+        <button id="modal-close" class="absolute top-4 right-4 text-[#7FA39B] hover:text-[#F2E9D8] text-xl leading-none w-8 h-8 flex items-center justify-center">&times;</button>
+        <div id="modal-content"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const countries = [
+    { name: "France", continent: "Europe", flag: "🇫🇷", famousFor: "Cuisine, fashion, and art history",
+      blurb: "France built its identity around gastronomy, haute couture, and centuries of painters and philosophers who made Paris a cultural capital.",
+      sites: [
+        { name: "Eiffel Tower", note: "Paris's iron landmark, built for the 1889 World's Fair." },
+        { name: "Louvre Museum", note: "Home to the Mona Lisa and one of the world's largest art collections." },
+        { name: "Palace of Versailles", note: "The opulent former royal residence outside Paris." },
+        { name: "Mont Saint-Michel", note: "A tidal island abbey off the Normandy coast." }
+      ]},
+    { name: "Italy", continent: "Europe", flag: "🇮🇹", famousFor: "Renaissance art and Roman history",
+      blurb: "Italy is where the Roman Empire and the Renaissance both peaked, leaving a dense trail of ruins, cathedrals, and masterpieces.",
+      sites: [
+        { name: "Colosseum", note: "The largest amphitheatre ever built by the Roman Empire." },
+        { name: "Venice Canals", note: "A city built on water, threaded with gondolas and bridges." },
+        { name: "Vatican & Sistine Chapel", note: "Home to Michelangelo's famous ceiling frescoes." },
+        { name: "Leaning Tower of Pisa", note: "A medieval bell tower famous for its tilt." }
+      ]},
+    { name: "Egypt", continent: "Africa", flag: "🇪🇬", famousFor: "Ancient pyramids and pharaonic history",
+      blurb: "Egypt's Nile-fed civilization built monuments to its pharaohs that have outlasted nearly every empire that came after.",
+      sites: [
+        { name: "Pyramids of Giza", note: "The last standing wonder of the ancient world." },
+        { name: "Great Sphinx", note: "A limestone guardian statue beside the pyramids." },
+        { name: "Karnak Temple", note: "A vast temple complex in Luxor built over 2,000 years." },
+        { name: "Valley of the Kings", note: "Underground tombs of New Kingdom pharaohs, including Tutankhamun." }
+      ]},
+    { name: "India", continent: "Asia", flag: "🇮🇳", famousFor: "Diverse cultures, spices, and monumental architecture",
+      blurb: "India's history spans thousands of years and dozens of empires, producing some of the world's most recognizable religious and royal architecture.",
+      sites: [
+        { name: "Taj Mahal", note: "A white marble mausoleum built by Shah Jahan for his wife." },
+        { name: "Jaipur's Amber Fort", note: "A hilltop fort of mirrored halls in Rajasthan." },
+        { name: "Varanasi Ghats", note: "Riverside steps along the Ganges, sacred to Hindus." },
+        { name: "Kerala Backwaters", note: "A network of lagoons and canals along the southwest coast." }
+      ]},
+    { name: "China", continent: "Asia", flag: "🇨🇳", famousFor: "Ancient dynasties and vast engineering feats",
+      blurb: "China's imperial dynasties left behind fortifications, palaces, and armies built at a scale few civilizations have matched.",
+      sites: [
+        { name: "Great Wall of China", note: "A defensive wall stretching thousands of kilometres." },
+        { name: "Forbidden City", note: "Beijing's imperial palace complex for 24 emperors." },
+        { name: "Terracotta Army", note: "Thousands of life-sized clay soldiers guarding Qin Shi Huang's tomb." },
+        { name: "Zhangjiajie", note: "Sandstone pillar mountains that inspired Avatar's floating peaks." }
+      ]},
+    { name: "Japan", continent: "Asia", flag: "🇯🇵", famousFor: "Tradition alongside cutting-edge modernity",
+      blurb: "Japan holds centuries-old temple culture and some of the world's most advanced cities within the same small archipelago.",
+      sites: [
+        { name: "Mount Fuji", note: "Japan's tallest peak and an enduring symbol of the country." },
+        { name: "Fushimi Inari Shrine", note: "Kyoto's shrine famous for thousands of red torii gates." },
+        { name: "Shibuya Crossing", note: "Tokyo's iconic, endlessly busy pedestrian intersection." },
+        { name: "Hiroshima Peace Memorial", note: "A preserved ruin commemorating the 1945 atomic bombing." }
+      ]},
+    { name: "United States", continent: "North America", flag: "🇺🇸", famousFor: "Natural wonders and cultural export",
+      blurb: "The US spans a continent's worth of landscapes and built the entertainment and business icons recognized nearly everywhere.",
+      sites: [
+        { name: "Grand Canyon", note: "A mile-deep gorge carved by the Colorado River." },
+        { name: "Statue of Liberty", note: "New York Harbor's symbol of freedom, gifted by France." },
+        { name: "Yellowstone National Park", note: "Geysers and hot springs atop a volcanic hotspot." },
+        { name: "Golden Gate Bridge", note: "San Francisco's suspension bridge spanning the bay." }
+      ]},
+    { name: "Brazil", continent: "South America", flag: "🇧🇷", famousFor: "Rainforest, carnival, and coastline",
+      blurb: "Brazil holds the largest share of the Amazon and a beach-and-festival culture that defines its cities.",
+      sites: [
+        { name: "Christ the Redeemer", note: "A giant Art Deco statue overlooking Rio de Janeiro." },
+        { name: "Amazon Rainforest", note: "The world's largest tropical rainforest, home to unmatched biodiversity." },
+        { name: "Iguazu Falls", note: "A sprawling system of waterfalls on the Argentina border." },
+        { name: "Copacabana Beach", note: "Rio's famous curved stretch of sand and boardwalk." }
+      ]},
+    { name: "Peru", continent: "South America", flag: "🇵🇪", famousFor: "Inca ruins and Andean landscapes",
+      blurb: "Peru was the heart of the Inca Empire, whose stonework still crowns the Andes above the desert coast.",
+      sites: [
+        { name: "Machu Picchu", note: "A 15th-century Inca citadel set high in the Andes." },
+        { name: "Nazca Lines", note: "Giant ancient geoglyphs visible only from above." },
+        { name: "Lake Titicaca", note: "The highest navigable lake in the world, on the Bolivia border." },
+        { name: "Sacred Valley", note: "A fertile Andean valley dotted with Inca terraces and villages." }
+      ]},
+    { name: "Mexico", continent: "North America", flag: "🇲🇽", famousFor: "Mesoamerican ruins and vibrant food culture",
+      blurb: "Mexico blends Aztec and Maya heritage with a food and color culture that has shaped cuisines worldwide.",
+      sites: [
+        { name: "Chichen Itza", note: "A Maya step-pyramid complex on the Yucatan Peninsula." },
+        { name: "Teotihuacan", note: "Ancient pyramids near Mexico City, including the Pyramid of the Sun." },
+        { name: "Tulum Ruins", note: "A clifftop Maya site overlooking the Caribbean Sea." },
+        { name: "Copper Canyon", note: "A canyon system in Chihuahua larger than the Grand Canyon." }
+      ]},
+    { name: "United Kingdom", continent: "Europe", flag: "🇬🇧", famousFor: "Royal history and literary heritage",
+      blurb: "The UK's monarchy, parliamentary system, and literary canon have influenced governance and storytelling far beyond its shores.",
+      sites: [
+        { name: "Stonehenge", note: "A prehistoric stone circle in Wiltshire, England." },
+        { name: "Tower of London", note: "A historic castle that has housed prisoners and crown jewels alike." },
+        { name: "Edinburgh Castle", note: "A fortress perched above Scotland's capital." },
+        { name: "Buckingham Palace", note: "The monarch's official London residence." }
+      ]},
+    { name: "Greece", continent: "Europe", flag: "🇬🇷", famousFor: "Birthplace of democracy and classical philosophy",
+      blurb: "Greece originated democratic government and much of Western philosophy, math, and theatre, still visible in its ruins.",
+      sites: [
+        { name: "Acropolis of Athens", note: "The hilltop citadel crowned by the Parthenon." },
+        { name: "Santorini", note: "A volcanic island famous for whitewashed, cliffside villages." },
+        { name: "Delphi", note: "The ancient sanctuary once considered the center of the world." },
+        { name: "Meteora", note: "Monasteries built atop towering sandstone pillars." }
+      ]},
+    { name: "Spain", continent: "Europe", flag: "🇪🇸", famousFor: "Architecture, festivals, and flamenco",
+      blurb: "Spain mixes Moorish and Catholic architectural legacies with a festival culture built around music, food, and late nights.",
+      sites: [
+        { name: "Sagrada Familia", note: "Gaudí's still-unfinished basilica in Barcelona." },
+        { name: "Alhambra", note: "A Moorish palace and fortress complex in Granada." },
+        { name: "Park Güell", note: "Another Gaudí landmark, a whimsical public park in Barcelona." },
+        { name: "Camino de Santiago", note: "A network of historic pilgrimage routes across northern Spain." }
+      ]},
+    { name: "Turkey", continent: "Asia", flag: "🇹🇷", famousFor: "Bridging Europe and Asia through empires",
+      blurb: "Turkey sits where Byzantine and Ottoman empires met, layering mosques, bazaars, and volcanic landscapes across two continents.",
+      sites: [
+        { name: "Hagia Sophia", note: "A former cathedral and mosque in Istanbul spanning 1,500 years." },
+        { name: "Cappadocia", note: "A region of fairy-chimney rock formations and hot-air balloons." },
+        { name: "Pamukkale", note: "White mineral terraces formed by natural hot springs." },
+        { name: "Ephesus", note: "One of the best-preserved ancient Greco-Roman cities." }
+      ]},
+    { name: "Russia", continent: "Europe", flag: "🇷🇺", famousFor: "Imperial history and vast scale",
+      blurb: "Russia spans eleven time zones and built palaces, cathedrals, and rail lines to match its scale.",
+      sites: [
+        { name: "Red Square & Kremlin", note: "Moscow's political and historic heart, with St. Basil's Cathedral." },
+        { name: "Hermitage Museum", note: "A former imperial palace in St. Petersburg holding millions of artworks." },
+        { name: "Lake Baikal", note: "The world's deepest and oldest freshwater lake." },
+        { name: "Trans-Siberian Railway", note: "The longest railway line in the world, crossing Siberia." }
+      ]},
+    { name: "Australia", continent: "Oceania", flag: "🇦🇺", famousFor: "Unique wildlife and vast natural landscapes",
+      blurb: "Australia's isolation produced ecosystems and wildlife found nowhere else, from coral reefs to red desert interior.",
+      sites: [
+        { name: "Sydney Opera House", note: "The sail-shaped performing arts landmark on Sydney Harbour." },
+        { name: "Great Barrier Reef", note: "The world's largest coral reef system." },
+        { name: "Uluru", note: "A sacred sandstone monolith at the heart of the Outback." },
+        { name: "Great Ocean Road", note: "A coastal drive past the limestone Twelve Apostles." }
+      ]},
+    { name: "South Africa", continent: "Africa", flag: "🇿🇦", famousFor: "Wildlife safaris and diverse landscapes",
+      blurb: "South Africa packs savanna, coastline, and mountains into one country, alongside a complex and recent political history.",
+      sites: [
+        { name: "Table Mountain", note: "A flat-topped mountain overlooking Cape Town." },
+        { name: "Kruger National Park", note: "One of Africa's largest game reserves, home to the Big Five." },
+        { name: "Robben Island", note: "The island prison that once held Nelson Mandela." },
+        { name: "Cape of Good Hope", note: "A rugged headland at Africa's southwestern tip." }
+      ]},
+    { name: "Kenya", continent: "Africa", flag: "🇰🇪", famousFor: "The Great Migration and safari tourism",
+      blurb: "Kenya's savannas host one of the planet's largest wildlife migrations and a deep tradition of pastoral cultures.",
+      sites: [
+        { name: "Maasai Mara", note: "The stage for the annual wildebeest Great Migration." },
+        { name: "Mount Kenya", note: "Africa's second-highest peak, with glacier-fed valleys." },
+        { name: "Lake Nakuru", note: "A soda lake known for its dense flamingo flocks." },
+        { name: "Amboseli National Park", note: "Elephant herds set against the backdrop of Kilimanjaro." }
+      ]},
+    { name: "Thailand", continent: "Asia", flag: "🇹🇭", famousFor: "Buddhist temples and tropical islands",
+      blurb: "Thailand's temple culture and coastline have made it one of Southeast Asia's most visited destinations.",
+      sites: [
+        { name: "Grand Palace", note: "Bangkok's ornate former royal residence." },
+        { name: "Wat Arun", note: "The riverside Temple of Dawn in Bangkok." },
+        { name: "Phi Phi Islands", note: "Limestone-cliffed islands in the Andaman Sea." },
+        { name: "Chiang Mai Old City", note: "A walled city of temples in northern Thailand." }
+      ]},
+    { name: "Indonesia", continent: "Asia", flag: "🇮🇩", famousFor: "Thousands of islands and ancient temples",
+      blurb: "Indonesia's 17,000 islands hold volcanic landscapes and some of the largest Buddhist and Hindu temples on Earth.",
+      sites: [
+        { name: "Borobudur", note: "The world's largest Buddhist temple, on Java." },
+        { name: "Bali's Rice Terraces", note: "Tiered green terraces farmed for centuries." },
+        { name: "Komodo National Park", note: "Home to the world's largest living lizard, the Komodo dragon." },
+        { name: "Mount Bromo", note: "An active volcano famous for its sunrise views." }
+      ]},
+    { name: "United Arab Emirates", continent: "Asia", flag: "🇦🇪", famousFor: "Rapid modernization and desert luxury",
+      blurb: "The UAE turned desert coastline into a global business and tourism hub within a few decades.",
+      sites: [
+        { name: "Burj Khalifa", note: "The tallest building in the world, in Dubai." },
+        { name: "Sheikh Zayed Grand Mosque", note: "Abu Dhabi's grand marble mosque complex." },
+        { name: "Dubai Desert Reserve", note: "Protected dunes offering wildlife and stargazing." },
+        { name: "Palm Jumeirah", note: "An artificial palm-shaped island off Dubai's coast." }
+      ]},
+    { name: "Jordan", continent: "Asia", flag: "🇯🇴", famousFor: "Ancient rock-cut cities and desert terrain",
+      blurb: "Jordan preserves one of the ancient world's most striking cities, carved directly into rose-colored sandstone.",
+      sites: [
+        { name: "Petra", note: "A city carved into rock cliffs by the Nabataeans over 2,000 years ago." },
+        { name: "Wadi Rum", note: "A vast red desert valley used as a backdrop for Mars films." },
+        { name: "Dead Sea", note: "The lowest point on Earth's land surface, extremely buoyant and salty." },
+        { name: "Jerash", note: "One of the best-preserved Roman provincial cities." }
+      ]},
+    { name: "Cambodia", continent: "Asia", flag: "🇰🇭", famousFor: "The Khmer Empire's temple architecture",
+      blurb: "Cambodia's Khmer Empire built the largest religious monument in the world, still standing in the jungle.",
+      sites: [
+        { name: "Angkor Wat", note: "The largest religious monument in the world, built in the 12th century." },
+        { name: "Bayon Temple", note: "A temple famous for its serene stone faces." },
+        { name: "Ta Prohm", note: "A jungle-swallowed temple made famous by Tomb Raider." },
+        { name: "Tonle Sap Lake", note: "Southeast Asia's largest freshwater lake, with floating villages." }
+      ]},
+    { name: "Nepal", continent: "Asia", flag: "🇳🇵", famousFor: "The Himalayas and mountaineering",
+      blurb: "Nepal holds eight of the world's ten highest peaks and a Himalayan trekking culture built around them.",
+      sites: [
+        { name: "Mount Everest", note: "The world's highest peak, on the border with Tibet." },
+        { name: "Kathmandu Durbar Square", note: "A cluster of temples and palaces in the old royal city." },
+        { name: "Annapurna Circuit", note: "A classic multi-week trekking route through the Annapurna range." },
+        { name: "Lumbini", note: "The birthplace of Siddhartha Gautama, the Buddha." }
+      ]}
+  ];
+
+  const grid = document.getElementById('country-grid');
+  const emptyState = document.getElementById('empty-state');
+  const searchInput = document.getElementById('search-input');
+  const continentFilters = document.getElementById('continent-filters');
+  const countryCount = document.getElementById('country-count');
+  const footerCount = document.getElementById('footer-count');
+  const modalOverlay = document.getElementById('modal-overlay');
+  const modalContent = document.getElementById('modal-content');
+  const modalClose = document.getElementById('modal-close');
+
+  let activeContinent = 'All';
+
+  const continents = ['All', ...Array.from(new Set(countries.map(c => c.continent))).sort()];
+
+  function renderFilters() {
+    continentFilters.innerHTML = continents.map(cont => `
+      <button data-continent="${cont}"
+        class="pill text-xs px-3 py-1.5 rounded-full border border-[#2E5959] text-[#9FC2BB] hover:border-[#C9542F] hover:text-[#F2E9D8] transition-colors ${cont === activeContinent ? 'active' : ''}">
+        ${cont}
+      </button>`).join('');
+
+    continentFilters.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeContinent = btn.dataset.continent;
+        renderFilters();
+        renderGrid();
+      });
+    });
+  }
+
+  function renderGrid() {
+    const query = searchInput.value.trim().toLowerCase();
+
+    const filtered = countries.filter(c => {
+      const matchesContinent = activeContinent === 'All' || c.continent === activeContinent;
+      const matchesQuery = !query ||
+        c.name.toLowerCase().includes(query) ||
+        c.famousFor.toLowerCase().includes(query) ||
+        c.blurb.toLowerCase().includes(query) ||
+        c.sites.some(s => s.name.toLowerCase().includes(query));
+      return matchesContinent && matchesQuery;
+    });
+
+    countryCount.textContent = `${filtered.length} of ${countries.length} countries`;
+    footerCount.textContent = `${countries.length} countries indexed`;
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '';
+      emptyState.classList.remove('hidden');
+      return;
+    }
+    emptyState.classList.add('hidden');
+
+    grid.innerHTML = filtered.map((c, i) => `
+      <button data-index="${countries.indexOf(c)}"
+        class="country-card text-left stamp-border rounded-sm bg-[#0F2A2C] hover:bg-[#153735] transition-colors p-5 flex flex-col gap-3">
+        <div class="flex items-center justify-between">
+          <span class="text-3xl">${c.flag}</span>
+          <span class="text-[10px] uppercase tracking-wide text-[#5C8580] border border-[#2E5959] rounded-full px-2 py-0.5">${c.continent}</span>
+        </div>
+        <div>
+          <h2 class="font-display text-xl text-[#F2E9D8]">${c.name}</h2>
+          <p class="text-sm text-[#8FB5AE] mt-1">${c.famousFor}</p>
+        </div>
+        <p class="text-xs text-[#5C8580] mt-auto pt-2">${c.sites.length} landmarks &rarr;</p>
+      </button>
+    `).join('');
+
+    grid.querySelectorAll('.country-card').forEach(card => {
+      card.addEventListener('click', () => openModal(countries[card.dataset.index]));
+    });
+  }
+
+  function openModal(c) {
+    modalContent.innerHTML = `
+      <div class="flex items-start gap-4 mb-2">
+        <span class="text-4xl">${c.flag}</span>
+        <div>
+          <h2 class="font-display text-3xl text-[#F2E9D8]">${c.name}</h2>
+          <p class="text-sm text-[#C9542F] mt-1">${c.famousFor}</p>
+        </div>
+      </div>
+      <p class="text-sm text-[#9FC2BB] leading-relaxed mb-6 mt-4">${c.blurb}</p>
+      <h3 class="text-xs uppercase tracking-wide text-[#5C8580] mb-3 border-t border-[#22403F] pt-4">Landmarks to see</h3>
+      <ul class="flex flex-col gap-4">
+        ${c.sites.map(s => `
+          <li class="flex gap-3">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#C9542F] mt-2 shrink-0"></span>
+            <div>
+              <p class="text-[#F2E9D8] text-sm font-medium">${s.name}</p>
+              <p class="text-[#8FB5AE] text-sm">${s.note}</p>
+            </div>
+          </li>
+        `).join('')}
+      </ul>
+    `;
+    modalOverlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    modalOverlay.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  modalClose.addEventListener('click', closeModal);
+  modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) closeModal();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  searchInput.addEventListener('input', renderGrid);
+
+  renderFilters();
+  renderGrid();
+</script>
+</body>
+</html>
